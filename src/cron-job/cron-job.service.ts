@@ -5,7 +5,7 @@ import { ScrapperService } from 'src/web-scrapper/web-scrapper.service';
 @Injectable()
 export class CronJobService {
   constructor(private readonly scrapperService: ScrapperService) {}
-  @Cron(CronExpression.EVERY_5_MINUTES, { timeZone: 'America/Caracas' })
+  @Cron(CronExpression.EVERY_DAY_AT_9AM, { timeZone: 'America/Caracas' })
   async getConversionRates() {
     try {
       const data = await this.scrapperService.getConversionRates();
