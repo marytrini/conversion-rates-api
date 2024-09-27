@@ -9,6 +9,10 @@ import configuration from './config/configuration';
 import { Conversion } from './web-scrapper/entities/conversion.entity';
 import { Currency } from './web-scrapper/entities/currency.entity';
 import { CronJobModule } from './cron-job/cron-job.module';
+import { ApiService } from './api/api.service';
+import { ApiModule } from './api/api.module';
+import { CurrencyService } from './currency/currency.service';
+import { CurrencyModule } from './currency/currency.module';
 
 @Module({
   imports: [
@@ -37,8 +41,10 @@ import { CronJobModule } from './cron-job/cron-job.module';
     TypeOrmModule.forFeature([Conversion, Currency]),
     WebScrapperModule,
     CronJobModule,
+    ApiModule,
+    CurrencyModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, ApiService, CurrencyService],
 })
 export class AppModule {}
