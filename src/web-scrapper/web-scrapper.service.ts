@@ -19,25 +19,7 @@ export class ScrapperService {
   async getConversionRates(): Promise<any> {
     const api = this.configService.get('config.api');
     const api_url = api.url;
-    const query = `
-      query getCountryConversions($countryCode: String!) {
-        getCountryConversions(payload: {countryCode: $countryCode}) {
-          baseCurrency {
-            code
-            name
-          }
-          conversionRates {
-          baseValue
-          official
-          principal
-            rateCurrency {
-              code
-            }
-            rateValue
-          }
-        }
-      }
-    `;
+    const query = api.query;
 
     const variables = {
       countryCode: 'VE',

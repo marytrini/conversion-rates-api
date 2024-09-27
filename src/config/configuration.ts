@@ -50,6 +50,25 @@ export default registerAs('config', () => {
     },
     api: {
       url: process.env.URL_API,
+      query: `
+      query getCountryConversions($countryCode: String!) {
+        getCountryConversions(payload: {countryCode: $countryCode}) {
+          baseCurrency {
+            code
+            name
+          }
+          conversionRates {
+          baseValue
+          official
+          principal
+            rateCurrency {
+              code
+            }
+            rateValue
+          }
+        }
+      }
+    `,
     },
   };
 });
