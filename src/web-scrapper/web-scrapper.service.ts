@@ -1,124 +1,62 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import axios from 'axios';
 import { Raw, Repository } from 'typeorm';
 import { Conversion } from './entities/conversion.entity';
-import { Currency } from './entities/currency.entity';
 import { ConfigService } from '@nestjs/config';
+import { CurrencyService } from '../currency/currency.service'; 
+import { ApiService } from '../api/api.service'; 
 
 @Injectable()
 export class ScrapperService {
   constructor(
     @InjectRepository(Conversion)
     private conversionRepository: Repository<Conversion>,
-    @InjectRepository(Currency)
-    private currencyRepository: Repository<Currency>,
-    private readonly configService: ConfigService,
+    private readonly currencyService: CurrencyService, 
+    private readonly apiService: ApiService, 
   ) {}
 
   async getConversionRates(): Promise<any> {
-    const api = this.configService.get('config.api');
-    const api_url = api.url;
-    const query = api.query;
+    const todayString = this.getTodayString();
 
-    const variables = {
-      countryCode: 'VE',
-    };
+    const existingConversion = await this.getExistingConversions(todayString);
 
-    try {
-      const today = new Date();
-
-      const todayString = today.toISOString().split('T')[0];
-
-      const existingConversion = await this.conversionRepository.find({
-        where: {
-          createdAt: Raw(
-            (alias) => `DATE(${alias}) = :date`,
-            { date: todayString }, // Compara solo la fecha, sin la hora
-          ),
-        },
-      });
-
-      if (existingConversion.length > 0) {
-        return {
-          data: existingConversion,
-        };
-      }
-
-      const response = await axios.post(
-        api_url,
-        {
-          query,
-          variables,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        },
-      );
-
-      if (response.data.errors) {
-        throw new InternalServerErrorException(response.data.errors);
-      }
-
-      const { baseCurrency, conversionRates } =
-        response.data.data.getCountryConversions;
-
-      const usdConversionRates = conversionRates.filter(
-        (rate) => rate.rateCurrency.code === 'USD',
-      );
-
-      for (const rate of usdConversionRates) {
-        const currencyCode = rate.rateCurrency.code;
-
-        let currency = await this.currencyRepository.findOne({
-          where: { sufix: currencyCode },
-        });
-
-        if (!currency) {
-          console.log(
-            `Currency not found. Creating new currency: ${currencyCode}`,
-          );
-          const newCurrency = new Currency();
-          newCurrency.sufix = currencyCode;
-          newCurrency.title = 'Dollar';
-
-          currency = await this.currencyRepository.save(newCurrency);
-          console.log('New Currency saved:', currency);
-        } else {
-          console.log('Currency fetched:', currency);
-        }
-
-        const conversionExists = existingConversion.some(
-          (conversion) =>
-            conversion.value === rate.baseValue &&
-            conversion.currency.id === currency.id,
-        );
-
-        if (!conversionExists) {
-          const newConversion = new Conversion();
-          newConversion.currency = currency;
-
-          newConversion.value = rate.baseValue;
-          await this.conversionRepository.save(newConversion);
-        }
-      }
-
+    if (existingConversion.length > 0) {
       return {
-        baseCurrency,
-        usdConversionRates,
+        data: existingConversion,
       };
-    } catch (error) {
-      if (error.code === 'ETIMEDOUT' || error.code === 'ENETUNREACH') {
-        // Lógica para manejar el tiempo de espera o redes inaccesibles
-        console.error('Error de conectividad:', error.message);
-      } else {
-        console.error('Error al ejecutar getConversionRates', error);
-        throw new InternalServerErrorException(
-          'Error al obtener las tasas de conversión.',
-        );
-      }
     }
+
+    const apiResponse = await this.apiService.fetchConversionRates();
+
+    const { baseCurrency, conversionRates } = apiResponse.data.data.getCountryConversions;
+
+    const usdConversionRates = conversionRates.filter(
+      (rate) => rate.rateCurrency.code === 'USD',
+    );
+
+    for (const rate of usdConversionRates) {
+      await this.currencyService.processConversion(rate, existingConversion);
+    }
+
+    return {
+      baseCurrency,
+      usdConversionRates,
+    };
+  }
+
+  private getTodayString(): string {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  }
+
+  private async getExistingConversions(todayString: string): Promise<Conversion[]> {
+    return this.conversionRepository.find({
+      where: {
+        createdAt: Raw(
+          (alias) => `DATE(${alias}) = :date`,
+          { date: todayString }, // Compara solo la fecha, sin la hora
+        ),
+      },
+    });
   }
 }
